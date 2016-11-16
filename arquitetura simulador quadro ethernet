@@ -1,0 +1,29 @@
+1)cliente origem informa seu mac
+2)cliente digita a mensagem
+3)cliente informa mac de destino
+4)É montado quadro ethernet e calculado seu tamanho
+5)Se >1500 bytes:
+	Divide a mensagem em quadros de ate 1500 bytes
+6)Monta quadro e calcula CRC
+7)Adiciona quadro no meio compartilhado
+8)Destino verifica se há quadro no meio compartilhado e retira caso houver
+9) Calcula CRC do quadro; Se igual ao do cabeçalho do quadro:
+	Aceita quadro e recupera a mensagem
+   Senao:
+	Rejeita quadro e monstra mensagem de erro no quadro 
+
+
+
+
+
+OBS:
+Classes:
+QuadroEthernet
+Meio
+ClienteDestino(Thread)
+Controller(Interface com usuario)
+##CRC calculado na classe QuadroEthernet
+##
+
+
+
