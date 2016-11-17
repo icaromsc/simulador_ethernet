@@ -13,7 +13,7 @@ class QuadroEthernet(object):
         preambulo: \n
         macDestino: endereço do mac destino \n
         macOrigem: endereço do mac origem \n
-        tipo: \ntes
+        tipo:
     
     
     '''
@@ -26,12 +26,14 @@ class QuadroEthernet(object):
         self.FCS=None
         self.pad=0
         self.tamMin=64
-        self.tamMax=1500
+        self.tamMinDados=46
+        self.tamMaxDados=1500
 
 
     def obterTamQuadro(self):
         #gera tamanhos para o cabeçalho do quadro
         pream=7
+        #alterar para gerar tam 2 ou 6
         tOri=random.randint(2,6)
         tDes=random.randint(2,6)
         SD=1
@@ -40,20 +42,22 @@ class QuadroEthernet(object):
         crc=4
         self.tamQuadro=pream + tOri + tDes + SD + length + tDados + crc
         #algoritmo padding
-        if(self.tamQuadro<self.tamMin):
-            self.padding()
+        if(tDados<self.tamMinDados):
+            self.padding(tDados)
 
         
     def crc32(self):
         return crc.crc32(self.dados)
         
-    
-    def padding(self):
-        self.pad=self.tamMin-self.tamQuadro
+    #alterar
+    def padding(self,tDados):
+        self.pad=self.tamMinDados-tDados
+        print 'padding add:',self.pad
+        self.dados=''.join(('',self.dados, '0' * self.pad))
 
             
     def exibir(self):
-        print 'Quadro Ethernet: \n',' preambulo---> ',self.preambulo,'\n mac destino--->',self.macDestino,'\n mac origem--->',self.macOrigem,'\n dados---> ',self.dados
+        print 'Quadro Ethernet: \n',' preambulo---> ',self.preambulo,'\n mac origem--->',self.macOrigem,'\n mac destino--->',self.macDestino,'\n dados---> ',self.dados,'\n CRC 32---> ',self.FCS,
 
 
 
@@ -125,15 +129,54 @@ class Meio(object):
         ruido=temp.replace(temp[pos],'?')
         self.quadro.dados=ruido
         #print ruido
+
         
         
             
 
-class ClienteDestino(object):
-
-    def __init__(self,mac):
-        self.mac=mac
+class ClienteDestino(threading.Thread):
     
+
+    def __init__(self, threadID, name, counter,canal):
+        threading.Thread.__init__(self)
+        self.name = name
+        self.counter = counter
+        self.mac=threadID
+        self.canal=canal
+        self.quadroRecebido=None
+
+
+        
+    def run(self):
+        print "Starting " + self.name
+        while(True):
+            #aguarda
+            time.sleep(self.counter)
+            #acessa canal
+            threadLock.acquire()
+            if self.canal.ocupado():
+                print '\n\n**************DESTINO****************\n\n'
+                #calcula CRC
+                if self.canal.quadro.crc32()==self.canal.quadro.FCS:
+                    print self.mac,'\n ...destino aceitou quadro'
+                    print self.mac,'\n ...destino retira o quadro do canal compartilhado'
+                    self.quadroRecebido=self.canal.retiraQuadro()
+                    print self.mac,'\n ...quadro recebido pelo destino:\n'
+                    self.quadroRecebido.exibir()
+                    self.quadroRecebido=None
+                else:
+                    print 'erro checksum'
+                    print 'destino rejeitou quadro'
+                    self.canal.retiraQuadro()
+                
+            threadLock.release()
+
+        
+def segmentar(quadro):
+    queue=collections.deque()
+    
+
+
 def aplicacao():
     print '-----------SIMULADOR QUADRO ETHERNET-----------------'
     
@@ -142,13 +185,39 @@ def aplicacao():
     canal=Meio()
     origem='00:1D:7D:B2:34:F9'
     destino='00:1D:7D:W4:86:G5'
+    counter=5
     #recupera dados do usuario
     q.macOrigem=origem
     q.macDestino=destino
-    q.dados=raw_input('informe a mensagem que deseja transmitir:')
-    q.exibir()
-    
+    tamDados=int(raw_input('informe o tamanho de dados que deseja transmitir:'))
+    tempDados='x' * tamDados
 
+    #faz padding
+
+    q.dados=tempDados
+    #print q.dados
+    #print tempDados
+    q.obterTamQuadro()
+    if q.tamQuadro>q.tamMaxDados:
+        
+        
+    
+    
+    #add checksum
+    q.FCS=q.crc32()
+    
+    
+    q.exibir()
+
+    #coloca no canal compartilhado
+    canal.addQuadro(q)
+    
+    
+    #instancia thread consumidor
+    consumidor=ClienteDestino(destino, 'cliente destino', counter,canal)
+    consumidor.start()
+    
+threadLock = threading.Lock()
 aplicacao()
     
         
