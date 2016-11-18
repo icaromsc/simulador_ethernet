@@ -34,8 +34,8 @@ class QuadroEthernet(object):
         #gera tamanhos para o cabeçalho do quadro
         pream=7
         #alterar para gerar tam 2 ou 6
-        tOri=random.randint(2,6)
-        tDes=random.randint(2,6)
+        tOri=2
+        tDes=2
         SD=1
         length=2
         tDados=len(self.dados)
@@ -49,7 +49,8 @@ class QuadroEthernet(object):
     def crc32(self):
         return crc.crc32(self.dados)
         
-    #alterar
+
+
     def padding(self,tDados):
         self.pad=self.tamMinDados-tDados
         print 'padding add:',self.pad
@@ -57,7 +58,7 @@ class QuadroEthernet(object):
 
             
     def exibir(self):
-        print 'Quadro Ethernet: \n',' preambulo---> ',self.preambulo,'\n mac origem--->',self.macOrigem,'\n mac destino--->',self.macDestino,'\n dados---> ',self.dados,'\n CRC 32---> ',self.FCS,
+        print 'Quadro Ethernet: \n',' preambulo---> ',self.preambulo,'\n mac origem--->',self.macOrigem,'\n mac destino--->',self.macDestino,'\n dados---> ',self.dados,'\n CRC 32---> ',bin(self.FCS)
 
 
 
@@ -154,8 +155,10 @@ class ClienteDestino(threading.Thread):
             time.sleep(self.counter)
             #acessa canal
             threadLock.acquire()
-            if self.canal.ocupado():
-                print '\n\n**************DESTINO****************\n\n'
+            if self.canal.quadro != None :
+                print '\n\n**************MEIO COMPARTILHADO****************\n\n'
+                self.canal.quadro.exibir()
+                print '\n\n**************DESTINO ',self.canal.quadro.macDestino,' ****************\n\n'
                 #calcula CRC
                 if self.canal.quadro.crc32()==self.canal.quadro.FCS:
                     print self.mac,'\n ...destino aceitou quadro'
@@ -179,7 +182,6 @@ def segmentar(quadro):
 
 def aplicacao():
     print '-----------SIMULADOR QUADRO ETHERNET-----------------'
-    
     #instancia quadro e canal 
     q=QuadroEthernet()
     canal=Meio()
@@ -191,6 +193,7 @@ def aplicacao():
     q.macDestino=destino
     tamDados=int(raw_input('informe o tamanho de dados que deseja transmitir:'))
     tempDados='x' * tamDados
+    print '\n\n**************ORIGEM ',origem,' ****************\n\n'
 
     #faz padding
 
@@ -198,7 +201,7 @@ def aplicacao():
     #print q.dados
     #print tempDados
     q.obterTamQuadro()
-    if q.tamQuadro>q.tamMaxDados:
+    #if q.tamQuadro>q.tamMaxDados:
         
         
     
@@ -211,6 +214,7 @@ def aplicacao():
 
     #coloca no canal compartilhado
     canal.addQuadro(q)
+    canal.transmitirQuadro()
     
     
     #instancia thread consumidor
