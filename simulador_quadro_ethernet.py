@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import binascii as crc
 import threading
 import time
@@ -40,10 +41,12 @@ class QuadroEthernet(object):
         length=2
         tDados=len(self.dados)
         crc=4
-        self.tamQuadro=pream + tOri + tDes + SD + length + tDados + crc
+        self.tamQuadro=pream + tOri + tDes + SD + length + crc
         #algoritmo padding
         if(tDados<self.tamMinDados):
             self.padding(tDados)
+        #atualiza tamanho do quadro
+        self.tamQuadro+=len(self.dados)
 
         
     def crc32(self):
@@ -55,10 +58,12 @@ class QuadroEthernet(object):
         self.pad=self.tamMinDados-tDados
         print 'padding add:',self.pad
         self.dados=''.join(('',self.dados, '0' * self.pad))
+        #atualiza tam do quadro
+        #self.tamQuadro+=len(self.dados)
 
             
     def exibir(self):
-        print 'Quadro Ethernet: \n',' preambulo---> ',self.preambulo,'\n mac origem--->',self.macOrigem,'\n mac destino--->',self.macDestino,'\n dados---> ',self.dados,'\n CRC 32---> ',bin(self.FCS)
+        print 'Quadro Ethernet: \n',' preambulo---> ',self.preambulo,'\n mac origem--->',self.macOrigem,'\n mac destino--->',self.macDestino,'\n tam quadro:',self.tamQuadro,'bytes','\n dados---> ',self.dados,'\n CRC 32---> ',bin(self.FCS)
 
 
 
@@ -67,7 +72,7 @@ class Meio(object):
     '''classe responsavel por compartilhar um quadro entre cliente origem e destino'''
     def __init__(self):
         self.quadro=None
-
+        self.finish=False
         
     def ocupado(self):
         return self.quadro!=None
@@ -118,10 +123,14 @@ class Meio(object):
 
 
     def transmitirQuadro(self):
-        chance=random.randint(0, 1)
+        print '\n \n ****** Quadro sendo transmitido ******* \n'
+        #10% de chance de ocorrer ruido
+        chance=random.randint(0, 10)
         if chance==1:
             print 'houve ruido durante a transmissão do quadro'
             self.__geraRuido()
+        else:
+            print '---->transmissão realizada com sucesso\n'
 
 
     def __geraRuido(self):
@@ -146,11 +155,10 @@ class ClienteDestino(threading.Thread):
         self.canal=canal
         self.quadroRecebido=None
 
-
         
     def run(self):
         print "Starting " + self.name
-        while(True):
+        while(not self.canal.finish):
             #aguarda
             time.sleep(self.counter)
             #acessa canal
@@ -173,53 +181,103 @@ class ClienteDestino(threading.Thread):
                     self.canal.retiraQuadro()
                 
             threadLock.release()
+        print '\n\n************ finishing connection... *************\n\n'
 
         
+
 def segmentar(quadro):
-    queue=collections.deque()
+    quadros=[]
+    origem=quadro.macOrigem
+    destino=quadro.macDestino
+    
+    #divide os dados em blocos de ate tamMaxDados
+    dif=len(quadro.dados) - quadro.tamMaxDados
+    d1=quadro.dados[0:(quadro.tamMaxDados)]
+    d2=quadro.dados[(quadro.tamMaxDados):quadro.tamMaxDados+dif]
+    
+    print '\n ****divindo quadros**** \n'
+
+    print '\ndados q1:\n',len(d1)
+    print '\ndados q2:\n',len(d2)
+
+    #adiciona quadros na lista
+    q1=QuadroEthernet()
+    q1.macOrigem=origem
+    q1.macDestino=destino
+    q1.dados=d1
+    
+    q2=QuadroEthernet()
+    q2.macOrigem=origem
+    q2.macDestino=destino
+    q2.dados=d2
+    
+    quadros.append(q1)
+    quadros.append(q2)
+    return quadros
     
 
 
 def aplicacao():
     print '-----------SIMULADOR QUADRO ETHERNET-----------------'
-    #instancia quadro e canal 
+    
+    #instancia quadro e canal
     q=QuadroEthernet()
     canal=Meio()
     origem='00:1D:7D:B2:34:F9'
     destino='00:1D:7D:W4:86:G5'
-    counter=5
-    #recupera dados do usuario
-    q.macOrigem=origem
-    q.macDestino=destino
-    tamDados=int(raw_input('informe o tamanho de dados que deseja transmitir:'))
-    tempDados='x' * tamDados
-    print '\n\n**************ORIGEM ',origem,' ****************\n\n'
-
-    #faz padding
-
-    q.dados=tempDados
-    #print q.dados
-    #print tempDados
-    q.obterTamQuadro()
-    #if q.tamQuadro>q.tamMaxDados:
-        
-        
-    
-    
-    #add checksum
-    q.FCS=q.crc32()
-    
-    
-    q.exibir()
-
-    #coloca no canal compartilhado
-    canal.addQuadro(q)
-    canal.transmitirQuadro()
-    
+    counter=2
     
     #instancia thread consumidor
     consumidor=ClienteDestino(destino, 'cliente destino', counter,canal)
     consumidor.start()
+
+    time.sleep(3)
+    #recupera dados do usuario
+    q.macOrigem=origem
+    q.macDestino=destino
+    tamDados=int(raw_input('informe o tamanho de dados que deseja transmitir:'))
+    if tamDados <2000:
+        tempDados='x' * tamDados
+    
+    #faz padding
+
+        q.dados=tempDados
+        #print q.dados
+        #print tempDados
+        q.obterTamQuadro()
+    
+        if len(q.dados)>q.tamMaxDados:
+            #segmenta envio dos quadros
+            quadros=segmentar(q)
+            for i in quadros:
+                print '\n\n**************ORIGEM ',origem,' ****************\n\n'
+                i.obterTamQuadro()
+                i.FCS=i.crc32()
+                i.exibir()
+        #coloca no canal compartilhado
+                canal.addQuadro(i)
+                canal.transmitirQuadro()
+                time.sleep(5)
+        else:
+            print '\n\n**************ORIGEM ',origem,' ****************\n\n'
+            #add checksum
+            q.FCS=q.crc32()
+            q.exibir()
+
+            #coloca no canal compartilhado
+            canal.addQuadro(q)
+            canal.transmitirQuadro()
+            
+        #finaliza conexao
+        time.sleep(5)
+        canal.finish=True
+    else:
+        print 'o tamanho máximo de dados eh 2000 bytes'
+       
+    
+    
+    
+    
     
 threadLock = threading.Lock()
 aplicacao()
